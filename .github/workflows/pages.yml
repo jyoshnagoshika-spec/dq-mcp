@@ -1,0 +1,48 @@
+name: pages
+
+# The demo page runs dq/core.py itself under Pyodide, so the site is assembled
+# from the live source rather than a copy. If a check changes, the page changes.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/fixtures
+          cp -r docs/. _site/
+          cp -r dq _site/dq
+          cp fixtures/orders.csv fixtures/customers.csv _site/fixtures/
+          rm -f _site/dq/server.py _site/dq/cli.py _site/dq/__main__.py
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

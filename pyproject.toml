@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dq-mcp"
+version = "0.2.0"
+description = "dbt-style data quality checks exposed to an agent over the Model Context Protocol"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jyoshna Goshika" }]
+requires-python = ">=3.10"
+keywords = ["mcp", "data-quality", "dbt", "data-engineering", "pandas"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Database",
+]
+dependencies = [
+  "pandas>=2.0",
+  "pyarrow>=14.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.2"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+dq = "dq.cli:main"
+
+[project.urls]
+Homepage = "https://jyoshnagoshika-spec.github.io/dq-mcp/"
+Source = "https://github.com/jyoshnagoshika-spec/dq-mcp"
+
+[tool.setuptools]
+packages = ["dq"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
