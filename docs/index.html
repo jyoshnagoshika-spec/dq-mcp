@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dq — data quality checks you can run right here</title>
+<meta name="description" content="An MCP server that gives a language model real data-quality tools. Run the same checks in your browser on the demo data or on your own file.">
+<meta property="og:title" content="dq — data quality checks you can run right here">
+<meta property="og:description" content="dbt-style not_null, unique, relationships, accepted_values, range and freshness checks, exposed to an agent over MCP. Try them in the browser.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#17212b;
+  --ink-soft:#556370;
+  --paper:#ecefea;
+  --surface:#ffffff;
+  --rule:#c3cbc6;
+  --rule-soft:#dde2dd;
+  --pass:#1f6b4c;
+  --fail:#a4243b;
+  --mark:#f6e58a;
+  --mark-edge:#d9bf33;
+  --focus:#2f6f9e;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font:400 16px/1.55 var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1220px;margin:0 auto;padding:0 24px}
+a{color:var(--ink);text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--focus)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* masthead */
+header{border-bottom:1px solid var(--rule)}
+.masthead{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;padding:20px 0 18px}
+.wordmark{font:600 22px/1 var(--mono);letter-spacing:-.01em}
+.masthead p{margin:0;color:var(--ink-soft);font-size:14.5px;flex:1;min-width:240px}
+.masthead a{font-size:14.5px}
+
+/* statement */
+.statement{padding:56px 0 36px;max-width:34ch}
+.statement h1{
+  margin:0 0 18px;font:600 clamp(30px,4.6vw,46px)/1.12 var(--sans);letter-spacing:-.022em;
+}
+.statement p{margin:0;max-width:62ch;color:var(--ink-soft);font-size:17px}
+.statement{max-width:none}
+
+/* workbench */
+.workbench{
+  display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,1fr);
+  gap:0;border:1px solid var(--rule);background:var(--surface);
+}
+.pane-data{border-right:1px solid var(--rule);min-width:0}
+.bar{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:12px 16px;border-bottom:1px solid var(--rule-soft);
+}
+.bar h2{margin:0;font:500 14px/1.4 var(--sans);color:var(--ink)}
+.bar .spacer{flex:1}
+.meta{font:400 12.5px/1.4 var(--mono);color:var(--ink-soft)}
+
+select,button,.filebtn{
+  font:500 13px/1 var(--sans);color:var(--ink);background:var(--surface);
+  border:1px solid var(--rule);border-radius:2px;padding:8px 11px;cursor:pointer;
+}
+select{font-family:var(--mono);font-size:12.5px}
+button:hover:not(:disabled),.filebtn:hover{border-color:var(--ink);background:#f6f7f5}
+button:disabled{opacity:.45;cursor:default}
+.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+.primary:hover:not(:disabled){background:#0d151d;border-color:#0d151d}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.filebtn:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+
+/* grid */
+.gridwrap{height:min(58vh,520px);overflow:auto;background:var(--surface)}
+table{border-collapse:separate;border-spacing:0;width:100%;font:400 12.5px/1.5 var(--mono)}
+thead th{
+  position:sticky;top:0;z-index:2;background:#f4f6f3;text-align:left;
+  padding:7px 10px;border-bottom:1px solid var(--rule);white-space:nowrap;font-weight:600;
+}
+thead th .dt{display:block;font-weight:400;color:var(--ink-soft);font-size:11px}
+tbody td{padding:5px 10px;border-bottom:1px solid #eef1ee;white-space:nowrap}
+tbody td:first-child,thead th:first-child{
+  color:var(--ink-soft);text-align:right;background:#f4f6f3;
+  position:sticky;left:0;z-index:1;border-right:1px solid var(--rule-soft);
+}
+tbody tr.marked td{background:#fdfae8}
+tbody tr.marked td:first-child{background:#f7f1d6;color:var(--ink)}
+td.mark{background:var(--mark);box-shadow:inset 0 -2px 0 var(--mark-edge);font-weight:500}
+tbody tr.marked td.mark{background:var(--mark)}
+td.empty{color:var(--fail);font-style:italic}
+@media (prefers-reduced-motion:no-preference){
+  td.mark{animation:paint .28s ease-out both}
+  @keyframes paint{from{background:transparent;box-shadow:inset 0 -2px 0 transparent}}
+}
+
+/* suite panel */
+.pane-tests{display:flex;flex-direction:column;min-width:0}
+.suite{padding:14px 16px;border-bottom:1px solid var(--rule-soft)}
+.suite label{display:block;font:500 13px/1.4 var(--sans);margin-bottom:8px}
+textarea{
+  width:100%;min-height:132px;resize:vertical;padding:10px;
+  font:400 12.5px/1.6 var(--mono);color:var(--ink);
+  background:#fbfcfa;border:1px solid var(--rule);border-radius:2px;
+}
+.suite-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.note{margin:10px 0 0;font-size:12.5px;color:var(--ink-soft)}
+.note code{font-family:var(--mono);font-size:12px}
+
+.results{flex:1;overflow:auto;padding:4px 0}
+.placeholder{padding:22px 16px;color:var(--ink-soft);font-size:14px;max-width:44ch}
+.result{
+  display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--rule-soft);
+  border-left:3px solid transparent;border-radius:0;background:transparent;padding:12px 16px;
+  font-family:var(--sans);
+}
+.result:hover{background:#f6f7f5;border-color:transparent;border-bottom-color:var(--rule-soft)}
+.result[aria-pressed=true]{background:#f4f6f3;border-left-color:var(--ink)}
+.result .head{display:flex;align-items:baseline;gap:9px}
+.verdict{font:600 11px/1.4 var(--mono);letter-spacing:.02em}
+.s-pass .verdict{color:var(--pass)}
+.s-fail .verdict{color:var(--fail)}
+.s-error .verdict{color:#8a6d1f}
+.result .name{font:500 13px/1.4 var(--mono)}
+.result .msg{margin:5px 0 0;font-size:13px;color:var(--ink-soft)}
+.tally{
+  display:flex;gap:16px;padding:12px 16px;border-top:1px solid var(--rule);
+  font:500 12.5px/1.4 var(--mono);background:#f4f6f3;
+}
+.tally .fail{color:var(--fail)}
+.tally .pass{color:var(--pass)}
+.tally .spacer{flex:1}
+.tally button{padding:4px 8px;font-size:12px}
+
+/* status line */
+.status{
+  display:flex;align-items:center;gap:10px;padding:10px 0 0;
+  font:400 13px/1.4 var(--mono);color:var(--ink-soft);
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-soft);flex:none}
+.dot.ready{background:var(--pass)}
+.dot.busy{background:var(--mark-edge)}
+.dot.error{background:var(--fail)}
+
+/* prose sections */
+.docs{padding:64px 0 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:44px}
+.docs section h2{margin:0 0 6px;font:600 19px/1.3 var(--sans);letter-spacing:-.01em}
+.docs section p{margin:0 0 14px;color:var(--ink-soft);font-size:14.5px;max-width:58ch}
+pre{
+  margin:0;padding:13px 14px;overflow-x:auto;background:var(--ink);color:#e6ebe7;
+  border-radius:2px;font:400 12.5px/1.7 var(--mono);
+}
+pre .c{color:#8fa3a8}
+dl{margin:0;font-size:14.5px}
+dt{font:500 13px/1.6 var(--mono);margin-top:10px}
+dd{margin:2px 0 0;color:var(--ink-soft);font-size:14px}
+footer{margin-top:56px;border-top:1px solid var(--rule);padding:22px 0 48px;font-size:13.5px;color:var(--ink-soft)}
+footer p{margin:0 0 4px}
+
+@media (max-width:900px){
+  .workbench{grid-template-columns:1fr}
+  .pane-data{border-right:0;border-bottom:1px solid var(--rule)}
+  .gridwrap{height:340px}
+  .wrap{padding:0 16px}
+  .statement{padding:40px 0 28px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap masthead">
+    <span class="wordmark">dq</span>
+    <p>dbt-style data quality checks, exposed to an agent over the Model Context Protocol.</p>
+    <a href="https://github.com/jyoshnagoshika-spec/dq-mcp">Source on GitHub</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="statement">
+    <h1>Ask a model about a table it cannot see and it will describe the table it expects.</h1>
+    <p>These checks make it look first. Everything below runs in your browser — the same
+       <code>core.py</code> the MCP server calls, compiled to WebAssembly. Nothing you load leaves this page.</p>
+  </div>
+
+  <div class="workbench">
+
+    <div class="pane-data">
+      <div class="bar">
+        <h2>Data</h2>
+        <select id="dataset" aria-label="Choose a dataset">
+          <option value="orders.csv">orders.csv — 900 rows, six planted defects</option>
+          <option value="customers.csv">customers.csv — 200 clean rows</option>
+        </select>
+        <label class="filebtn">
+          Open a CSV
+          <input type="file" id="file" accept=".csv,.tsv,.json,.jsonl,.txt">
+        </label>
+        <span class="spacer"></span>
+        <span class="meta" id="shape"></span>
+      </div>
+      <div class="gridwrap" id="gridwrap">
+        <table id="grid"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="pane-tests">
+      <div class="suite">
+        <label for="spec">Assertions to run</label>
+        <textarea id="spec" spellcheck="false" aria-describedby="spec-note"></textarea>
+        <div class="suite-actions">
+          <button id="run" class="primary" disabled>Run checks</button>
+          <button id="suggest" disabled>Suggest tests from the data</button>
+        </div>
+        <p class="note" id="spec-note">Same JSON the <code>run_suite</code> tool takes. Edit it and run again.</p>
+      </div>
+
+      <div class="results" id="results">
+        <p class="placeholder">Results appear here. Select one and the rows it caught are
+          highlighted in the table.</p>
+      </div>
+
+      <div class="tally" id="tally" hidden>
+        <span class="pass" id="t-pass"></span>
+        <span class="fail" id="t-fail"></span>
+        <span class="spacer"></span>
+        <button id="copy">Copy report JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="status" id="status" role="status" aria-live="polite">
+    <span class="dot" id="dot"></span><span id="status-text">Starting Python</span>
+  </p>
+
+  <div class="docs">
+
+    <section>
+      <h2>Give it to Claude</h2>
+      <p>Clone the repo, then point Claude Desktop at the virtual environment's Python — not a bare
+         <code>python</code>, which is the single commonest reason the server never appears.</p>
+      <pre><span class="c">// claude_desktop_config.json</span>
+{
+  "mcpServers": {
+    "dq": {
+      "command": "/abs/path/dq-mcp/.venv/bin/python",
+      "args": ["/abs/path/dq-mcp/dq_server.py"]
+    }
+  }
+}</pre>
+      <p class="note">Then ask it: profile <code>fixtures/orders.csv</code>, suggest a suite, and run it.</p>
+    </section>
+
+    <section>
+      <h2>Or run it in CI</h2>
+      <p>An MCP server is only reachable from an agent. The same engine has a command line, so a
+         pipeline can fail a build on a broken assertion.</p>
+      <pre>$ dq suggest fixtures/orders.csv > suite.json
+$ dq suite fixtures/orders.csv --spec suite.json
+
+  [FAIL]  unique  5 row(s) share a key that
+          should be unique — ORD-00013 appears 3 times.
+
+$ echo $?
+1</pre>
+      <p class="note">Exit 1 when an assertion fails, 2 when a check could not run at all.</p>
+    </section>
+
+    <section>
+      <h2>The checks</h2>
+      <dl>
+        <dt>not_null</dt><dd>Columns that must be fully populated.</dd>
+        <dt>unique</dt><dd>One column, or several as a composite key.</dd>
+        <dt>relationships</dt><dd>Every foreign key exists in the parent table.</dd>
+        <dt>accepted_values</dt><dd>A column stays inside an allowed set.</dd>
+        <dt>range</dt><dd>A number stays between bounds. Catches the negative amount that passes everything else.</dd>
+        <dt>freshness</dt><dd>The newest row is recent enough. A table can be clean and three days stale.</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>Reading a result</h2>
+      <p>Status has three values, not two. <strong>Error</strong> means the check could not run and tells you
+         nothing about the data; <strong>fail</strong> means it ran and the assertion did not hold. Counting a
+         missing column as a data failure hides the real ones.</p>
+      <p>A pass means the assertion held on the rows present. It does not mean the data is correct —
+         a fully populated column of wrong values passes <code>not_null</code> cleanly.</p>
+    </section>
+
+  </div>
+
+  <footer>
+    <p>Built by Jyoshna Goshika.
+       <a href="https://github.com/jyoshnagoshika-spec/dq-mcp">Repository</a> ·
+       <a href="https://linkedin.com/in/jyoshnag918/">LinkedIn</a></p>
+    <p>MIT licensed. Runs on Pyodide; files you open stay in your browser.</p>
+  </footer>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+const MODULES = ["dq/__init__.py","dq/core.py","dq/loaders.py","dq/suite.py","bridge.py"];
+
+const DEFAULT_SPECS = {
+  "orders.csv": {
+    not_null: ["order_id", "customer_id"],
+    unique: [["order_id"]],
+    accepted_values: { status: ["placed","shipped","delivered","cancelled","returned"] },
+    range: { amount: { min: 0 } },
+    freshness: { ordered_at: { max_age_hours: 24, now: "2026-01-15T12:00:00Z" } },
+    relationships: [{ column: "customer_id", parent: "customers.csv", parent_column: "customer_id" }]
+  },
+  "customers.csv": {
+    not_null: ["customer_id", "name", "region"],
+    unique: [["customer_id"]],
+    accepted_values: { region: ["north","south","east","west"] }
+  }
+};
+
+const el = id => document.getElementById(id);
+const frames = new Map();
+const dot = el("dot"), statusText = el("status-text");
+let pyodide, bridge, current = "orders.csv", lastReport = null, activeIndex = null;
+
+function status(text, state){
+  statusText.textContent = text;
+  dot.className = "dot" + (state ? " " + state : "");
+}
+
+async function boot(){
+  try{
+    status("Starting Python", "busy");
+    pyodide = await loadPyodide();
+    status("Loading pandas", "busy");
+    await pyodide.loadPackage("pandas");
+
+    status("Loading the checks", "busy");
+    const sources = await Promise.all(MODULES.map(async path => {
+      const res = await fetch(path);
+      if(!res.ok) throw new Error(`could not fetch ${path} (${res.status})`);
+      return res.text();
+    }));
+    pyodide.FS.mkdirTree("/home/pyodide/dq");
+    MODULES.forEach((path, i) => pyodide.FS.writeFile("/home/pyodide/" + path, sources[i]));
+    pyodide.runPython("import sys; sys.path.insert(0, '/home/pyodide')");
+    bridge = pyodide.pyimport("bridge");
+
+    status("Loading the demo data", "busy");
+    for(const name of ["orders.csv","customers.csv"]){
+      const res = await fetch("fixtures/" + name);
+      if(!res.ok) throw new Error(`could not fetch fixtures/${name}`);
+      const loaded = JSON.parse(bridge.load(name, await res.text()));
+      if(!loaded.ok) throw new Error(loaded.error);
+      frames.set(name, loaded);
+    }
+
+    show("orders.csv");
+    el("run").disabled = false;
+    el("suggest").disabled = false;
+    status("Ready", "ready");
+  }catch(err){
+    status("Could not start: " + err.message, "error");
+  }
+}
+
+function show(name){
+  current = name;
+  const f = frames.get(name);
+  drawGrid(f);
+  el("shape").textContent = `${f.rows} rows × ${f.columns.length} columns`
+    + (f.shown < f.rows ? ` · showing first ${f.shown}` : "");
+  const spec = DEFAULT_SPECS[name];
+  el("spec").value = spec ? JSON.stringify(spec, null, 2) : "{}";
+  clearResults();
+}
+
+function drawGrid(f){
+  const thead = el("grid").tHead, tbody = el("grid").tBodies[0];
+  thead.innerHTML = "";
+  const hr = thead.insertRow();
+  hr.appendChild(document.createElement("th"));
+  f.columns.forEach((c, i) => {
+    const th = document.createElement("th");
+    th.textContent = c;
+    const dt = document.createElement("span");
+    dt.className = "dt"; dt.textContent = f.dtypes[i];
+    th.appendChild(dt);
+    hr.appendChild(th);
+  });
+
+  const body = document.createDocumentFragment();
+  f.grid.forEach((row, r) => {
+    const tr = document.createElement("tr");
+    tr.dataset.row = r;
+    const n = document.createElement("td");
+    n.textContent = r + 1;
+    tr.appendChild(n);
+    row.forEach((v, c) => {
+      const td = document.createElement("td");
+      td.dataset.col = f.columns[c];
+      if(v === ""){ td.textContent = "null"; td.className = "empty"; }
+      else td.textContent = v;
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  tbody.innerHTML = "";
+  tbody.appendChild(body);
+  el("gridwrap").scrollTop = 0;
+}
+
+function clearMarks(){
+  el("grid").querySelectorAll("tr.marked").forEach(tr => tr.classList.remove("marked"));
+  el("grid").querySelectorAll("td.mark").forEach(td => td.classList.remove("mark"));
+}
+
+function clearResults(){
+  lastReport = null; activeIndex = null;
+  const box = el("results");
+  box.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "placeholder";
+  p.textContent = "Results appear here. Select one and the rows it caught are highlighted in the table.";
+  box.appendChild(p);
+  el("tally").hidden = true;
+  clearMarks();
+}
+
+function targetColumns(result){
+  const t = result.target || {};
+  const cols = [].concat(t.columns || [], t.key || [], t.column || [], t.child_column || []);
+  return new Set(cols.map(String));
+}
+
+function label(result){
+  const t = result.target || {};
+  const subject = (t.columns || t.key || []).join(" + ") || t.column || t.child_column || "";
+  return `${result.test}(${subject})`;
+}
+
+function renderResults(report){
+  lastReport = report; activeIndex = null;
+  const box = el("results");
+  box.innerHTML = "";
+  clearMarks();
+
+  report.results.forEach((r, i) => {
+    const b = document.createElement("button");
+    b.className = "result s-" + r.status;
+    b.type = "button";
+    b.setAttribute("aria-pressed", "false");
+    b.innerHTML = `<span class="head"><span class="verdict">${
+      {pass:"PASS", fail:"FAIL", error:"ERROR"}[r.status]
+    }</span><span class="name"></span></span><p class="msg"></p>`;
+    b.querySelector(".name").textContent = label(r);
+    b.querySelector(".msg").textContent = r.message;
+    b.addEventListener("click", () => select(i, b));
+    box.appendChild(b);
+  });
+
+  el("t-pass").textContent = `${report.tests_passed} passed`;
+  el("t-fail").textContent = report.tests_failed
+    ? `${report.tests_failed} failed`
+    : (report.tests_errored ? `${report.tests_errored} could not run` : "");
+  el("tally").hidden = false;
+
+  const firstFail = report.results.findIndex(r => r.status === "fail");
+  if(firstFail >= 0) select(firstFail, box.children[firstFail]);
+}
+
+function select(i, button){
+  const result = lastReport.results[i];
+  document.querySelectorAll(".result").forEach(b => b.setAttribute("aria-pressed", "false"));
+  button.setAttribute("aria-pressed", "true");
+  activeIndex = i;
+  clearMarks();
+
+  const rows = result.failing_rows || [];
+  if(!rows.length) return;
+
+  const cols = targetColumns(result);
+  const tbody = el("grid").tBodies[0];
+  rows.forEach(r => {
+    const tr = tbody.rows[r];
+    if(!tr) return;
+    tr.classList.add("marked");
+    for(const td of tr.cells){
+      if(td.dataset.col && cols.has(td.dataset.col)) td.classList.add("mark");
+    }
+  });
+
+  const first = tbody.rows[rows[0]];
+  if(first) first.scrollIntoView({ block: "center",
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
+el("run").addEventListener("click", () => {
+  status("Running", "busy");
+  const out = JSON.parse(bridge.run(current, el("spec").value));
+  if(out.error){ status(out.error, "error"); return; }
+  renderResults(out);
+  status(`${out.tests_run} checks on ${current}`, "ready");
+});
+
+el("suggest").addEventListener("click", () => {
+  const out = JSON.parse(bridge.suggest(current));
+  if(out.error){ status(out.error, "error"); return; }
+  el("spec").value = JSON.stringify(out.suite, null, 2);
+  status(`Proposed ${out.reasons.length} checks from the data — read them before trusting them`, "ready");
+});
+
+el("dataset").addEventListener("change", e => show(e.target.value));
+
+el("file").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  status("Reading " + file.name, "busy");
+  try{
+    const loaded = JSON.parse(bridge.load(file.name, await file.text()));
+    if(!loaded.ok){ status(loaded.error, "error"); return; }
+    frames.set(file.name, loaded);
+    const opt = document.createElement("option");
+    opt.value = file.name;
+    opt.textContent = `${file.name} — ${loaded.rows} rows`;
+    el("dataset").appendChild(opt);
+    el("dataset").value = file.name;
+    show(file.name);
+    el("spec").value = "{}";
+    status("Loaded. Suggest tests from the data, or write your own.", "ready");
+  }catch(err){
+    status("Could not read that file: " + err.message, "error");
+  }
+});
+
+el("copy").addEventListener("click", async () => {
+  if(!lastReport) return;
+  await navigator.clipboard.writeText(JSON.stringify(lastReport, null, 2));
+  status("Report copied", "ready");
+});
+
+boot();
+</script>
+</body>
+</html>

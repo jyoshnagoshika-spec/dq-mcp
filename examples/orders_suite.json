@@ -1,0 +1,12 @@
+{
+  "not_null": ["order_id", "customer_id"],
+  "unique": [["order_id"]],
+  "accepted_values": {
+    "status": ["placed", "shipped", "delivered", "cancelled", "returned"]
+  },
+  "range": { "amount": { "min": 0 } },
+  "freshness": { "ordered_at": { "max_age_hours": 24, "now": "2026-01-15T12:00:00Z" } },
+  "relationships": [
+    { "column": "customer_id", "parent": "fixtures/customers.csv", "parent_column": "customer_id" }
+  ]
+}
